@@ -8,7 +8,6 @@ public class ProductRepository {
     public static final String URL = "jdbc:sqlite:webbutiken.db";
 
     public ArrayList<Product> getAll() throws SQLException {
-
         ArrayList<Product> products = new ArrayList<>();
 
         try (Connection conn = DriverManager.getConnection(URL);
@@ -16,61 +15,89 @@ public class ProductRepository {
              ResultSet rs = stmt.executeQuery("SELECT * FROM products")) {
 
             while (rs.next()) {
-                Product product1 = new Product("Hej", 10.10, 50);
-                Product product = new Product(rs.getString("name"),
-                        rs.getDouble("price"),
-                        rs.getInt("stock_quantity"));
+                // Kolla vilka kolumner som faktiskt finns för att undvika SQL-fel
+                int productId = rs.getInt("product_id");
+                String name = rs.getString("name");
+                double price = rs.getDouble("price");
+                int stockQuantity = rs.getInt("stock_quantity");
+
+                // Skapa en produkt med de kolumner vi vet finns
+                Product product = new Product(
+                        productId,
+                        name,
+                        price,
+                        stockQuantity,
+                        null,  // Sätt categoryName till null eftersom kolumnen inte finns
+                        rs.getString("description") // Denna kolumn kan också vara null
+                );
                 products.add(product);
             }
+        } catch (SQLException e) {
+            throw new SQLException("Fel vid hämtning av produkter: " + e.getMessage());
         }
         return products;
     }
 
     public Product getProductById(int productId) throws SQLException {
-
         String sql = "SELECT * FROM products WHERE product_id = ?";
 
         try (Connection conn = DriverManager.getConnection(URL);
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
             pstmt.setInt(1, productId);
-
             ResultSet rs = pstmt.executeQuery();
 
-            if (!rs.next()) {
-                return null;
+            if (rs.next()) {
+                return new Product(
+                        productId,
+                        rs.getString("name"),
+                        rs.getDouble("price"),
+                        rs.getInt("stock_quantity"),
+                        null, // Sätt categoryName till null
+                        rs.getString("description")
+                );
+            } else {
+                return null; // Ingen produkt hittades
             }
-            return new Product(rs.getString("name"), rs.getDouble("price"), rs.getInt("stock_quantity"));
+        } catch (SQLException e) {
+            throw new SQLException("Fel vid hämtning av produkt: " + e.getMessage());
         }
     }
 
     public ArrayList<Product> getProductsByCategoryName(String categoryName) throws SQLException {
-
         ArrayList<Product> products = new ArrayList<>();
 
-        String sql = "SELECT p.*, c.name\n" +
-                "  FROM products p\n" +
-                "  JOIN products_categories pc ON p.product_id=pc.product_id\n" +
-                "  JOIN categories c ON c.category_id=pc.category_id\n" +
-                "  WHERE c.name LIKE ?;";
+        // Denna metod behöver troligen justeras baserat på din databasstruktur
+        // Jag antar att du har en koppling mellan produkter och kategorier
+        String sql = "SELECT p.* FROM products p " +
+                "JOIN products_categories pc ON p.product_id = pc.product_id " +
+                "JOIN categories c ON c.category_id = pc.category_id " +
+                "WHERE c.name LIKE ?";
 
         try (Connection conn = DriverManager.getConnection(URL);
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
             pstmt.setString(1, "%" + categoryName + "%");
             ResultSet rs = pstmt.executeQuery();
-            if (!rs.next()) {
-                return null;
-            }
+
             while (rs.next()) {
-                Product product = new Product(rs.getString("name"),
+                Product product = new Product(
+                        rs.getInt("product_id"),
+                        rs.getString("name"),
                         rs.getDouble("price"),
-                        rs.getInt("stock_quantity"));
+                        rs.getInt("stock_quantity"),
+                        categoryName, // Använd den inkommande kategorin
+                        rs.getString("description")
+                );
                 products.add(product);
             }
+
             return products;
+        } catch (SQLException e) {
+            throw new SQLException("Fel vid hämtning av produkter efter kategori: " + e.getMessage());
         }
     }
+
     public void updateProductPrice(int productId, double newPrice) throws SQLException {
         if (newPrice < 0) {
             throw new IllegalArgumentException("Priset kan inte vara negativt");
@@ -155,16 +182,17 @@ public class ProductRepository {
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
             pstmt.setString(1, "%" + searchTerm + "%");
-
             ResultSet rs = pstmt.executeQuery();
 
             while (rs.next()) {
                 Product product = new Product(
+                        rs.getInt("product_id"),
                         rs.getString("name"),
                         rs.getDouble("price"),
-                        rs.getInt("stock_quantity")
+                        rs.getInt("stock_quantity"),
+                        null, // Sätt categoryName till null
+                        rs.getString("description")
                 );
-                product.setProductId(rs.getInt("product_id"));
                 products.add(product);
             }
         } catch (SQLException e) {

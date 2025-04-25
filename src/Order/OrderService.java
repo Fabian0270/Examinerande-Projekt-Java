@@ -15,6 +15,9 @@ public class OrderService {
     public OrderService() {
         this.orderRepository = new OrderRepository();
         this.productRepository = new ProductRepository();
+
+        // Ta bort utskriften av databasschemat
+        // orderRepository.printDatabaseSchema();
     }
 
     public List<Order> getOrderHistoryForCustomer(int customerId) throws SQLException {
@@ -26,6 +29,19 @@ public class OrderService {
     }
 
     public Order createOrder(Customer customer, List<OrderItem> items) throws SQLException {
+        if (customer == null) {
+            throw new IllegalArgumentException("Kunden kan inte vara null");
+        }
+
+        if (items == null || items.isEmpty()) {
+            throw new IllegalArgumentException("Ordern måste innehålla minst en produkt");
+        }
+
+        // Kontrollera att kunden har ett giltigt ID
+        if (customer.getCustomerId() <= 0) {
+            throw new IllegalArgumentException("Kunden har ett ogiltigt ID");
+        }
+
         // Validera lagersaldo för varje orderItem
         for (OrderItem item : items) {
             validateStock(item.getProduct().getProductId(), item.getQuantity());
@@ -37,37 +53,43 @@ public class OrderService {
         order.setOrderItems(items);
 
         try {
+            // Skapa order i databasen utan extra utskrifter
             int orderId = orderRepository.createOrder(order);
-            return orderRepository.getOrdersByCustomerId(customer.getCustomerId())
-                    .stream()
-                    .filter(o -> o.getOrderId() == orderId)
-                    .findFirst()
-                    .orElse(null);
+            order.setOrderId(orderId);
+            return order;
         } catch (SQLException e) {
             throw new SQLException("Kunde inte skapa order: " + e.getMessage());
         }
     }
 
     public void validateStock(int productId, int requestedQuantity) throws SQLException {
-        Product product = productRepository.getProductById(productId);
+        try {
+            Product product = productRepository.getProductById(productId);
 
-        if (product == null) {
-            throw new IllegalArgumentException("Produkten finns inte i sortimentet.");
-        }
+            if (product == null) {
+                throw new IllegalArgumentException("Produkten finns inte i sortimentet.");
+            }
 
-        if (requestedQuantity <= 0) {
-            throw new IllegalArgumentException("Kvantiteten måste vara större än 0.");
-        }
+            if (requestedQuantity <= 0) {
+                throw new IllegalArgumentException("Kvantiteten måste vara större än 0.");
+            }
 
-        if (requestedQuantity > product.getQuantity()) {
-            throw new IllegalArgumentException(
-                    "Otillräckligt lager för " + product.getName() + ". Tillgängligt: " +
-                            product.getQuantity() + ", begärt: " + requestedQuantity
-            );
+            if (requestedQuantity > product.getQuantity()) {
+                throw new IllegalArgumentException(
+                        "Otillräckligt lager för " + product.getName() + ". Tillgängligt: " +
+                                product.getQuantity() + ", begärt: " + requestedQuantity
+                );
+            }
+        } catch (SQLException e) {
+            throw new SQLException("Kunde inte validera lagersaldo: " + e.getMessage());
         }
     }
 
     public double calculateOrderTotal(Order order) {
+        if (order == null || order.getOrderItems() == null || order.getOrderItems().isEmpty()) {
+            return 0;
+        }
+
         double total = 0;
         for (OrderItem item : order.getOrderItems()) {
             total += item.getSubtotal();

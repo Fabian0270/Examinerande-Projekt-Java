@@ -5,30 +5,61 @@ import java.util.ArrayList;
 
 public class CustomerService {
 
-    Customer loggedInCustomer;
+    private Customer loggedInCustomer;
+    private CustomerRepository customerRepository;
 
     public CustomerService(Customer customer){
-        loggedInCustomer = customer;
+        this.loggedInCustomer = customer;
+        this.customerRepository = new CustomerRepository();
     }
 
-    CustomerRepository customerRepository = new CustomerRepository();
-
     public ArrayList<Customer> getAllCustomers() throws SQLException {
-        System.out.println("Detta är vårt logiska lager");
-        System.out.println("Här ordnar vi med uträkningar och sånt kul");
-        return customerRepository.getAll();
+        try {
+            return customerRepository.getAll();
+        } catch (SQLException e) {
+            throw new SQLException("Kunde inte hämta kunder: " + e.getMessage());
+        }
     }
 
     public Customer getCustomerById(int id) throws SQLException {
-        return customerRepository.getCustomerById(id);
+        try {
+            return customerRepository.getCustomerById(id);
+        } catch (SQLException e) {
+            throw new SQLException("Kunde inte hämta kund: " + e.getMessage());
+        }
     }
 
     public void addCustomer(String name, String phone, String email, String address, String password) throws SQLException {
-        customerRepository.addCustomer(name, phone, email, address, password);
+        try {
+            // Validera indata
+            if (name == null || name.trim().isEmpty()) {
+                throw new IllegalArgumentException("Namnet får inte vara tomt");
+            }
+
+            if (email == null || email.trim().isEmpty()) {
+                throw new IllegalArgumentException("E-postadressen får inte vara tom");
+            }
+
+            if (password == null || password.length() < 6) {
+                throw new IllegalArgumentException("Lösenordet måste vara minst 6 tecken");
+            }
+
+            customerRepository.addCustomer(name, phone, email, address, password);
+        } catch (SQLException e) {
+            throw new SQLException("Kunde inte lägga till kund: " + e.getMessage());
+        }
     }
 
     public void updateCustomerEmail(String email, int customerId) throws SQLException {
-        customerRepository.updateCustomerEmail(email, customerId);
-    }
+        try {
+            // Validera e-postadressen
+            if (email == null || email.trim().isEmpty()) {
+                throw new IllegalArgumentException("E-postadressen får inte vara tom");
+            }
 
+            customerRepository.updateCustomerEmail(email, customerId);
+        } catch (SQLException e) {
+            throw new SQLException("Kunde inte uppdatera kundens e-postadress: " + e.getMessage());
+        }
+    }
 }
